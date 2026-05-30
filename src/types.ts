@@ -42,3 +42,11 @@ export type DeliveryGroup = {
   totalQuantity: number;
   dateRange: string;
 };
+
+export type PublicationGroup = {
+  id: string;
+  publicationName: string;
+  items: DeliveryItem[];
+  totalQuantity: number;
+  dateRange: string;
+};

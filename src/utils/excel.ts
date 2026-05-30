@@ -1,5 +1,11 @@
 import * as XLSX from "xlsx";
-import type { DeliveryDocument, DeliveryGroup, DeliveryItem, UploadFile } from "../types";
+import type {
+  DeliveryDocument,
+  DeliveryGroup,
+  DeliveryItem,
+  PublicationGroup,
+  UploadFile,
+} from "../types";
 
 type DroppedEntry = {
   isFile: boolean;
@@ -99,9 +105,63 @@ export function groupDeliveryDocuments(documents: DeliveryDocument[]): DeliveryG
 }
 
 export function downloadDeliveryGroup(group: DeliveryGroup) {
+  downloadDeliveryItems({
+    dateRange: group.dateRange,
+    destinationName: group.destinationName,
+    items: group.items,
+  });
+}
+
+export function groupItemsByPublication(items: DeliveryItem[]): PublicationGroup[] {
+  const groupsByPublication = new Map<string, DeliveryItem[]>();
+
+  for (const item of items) {
+    const current = groupsByPublication.get(item.publicationName) ?? [];
+    current.push(item);
+    groupsByPublication.set(item.publicationName, current);
+  }
+
+  return Array.from(groupsByPublication.entries())
+    .map(([publicationName, publicationItems]) => {
+      const sortedItems = [...publicationItems].sort(compareItems);
+
+      return {
+        id: publicationName,
+        publicationName,
+        items: sortedItems,
+        totalQuantity: sortedItems.reduce((sum, item) => sum + item.quantity, 0),
+        dateRange: buildDateRange(sortedItems.map((item) => item.deliveryDate)),
+      };
+    })
+    .sort((a, b) => a.publicationName.localeCompare(b.publicationName, "ko"));
+}
+
+export function downloadPublicationGroup(destinationName: string, group: PublicationGroup) {
+  downloadDeliveryItems({
+    dateRange: group.dateRange,
+    destinationName,
+    fileNameParts: [destinationName, group.publicationName],
+    items: group.items,
+    sheetName: group.publicationName,
+  });
+}
+
+function downloadDeliveryItems({
+  dateRange,
+  destinationName,
+  fileNameParts = [destinationName],
+  items,
+  sheetName = destinationName,
+}: {
+  dateRange: string;
+  destinationName: string;
+  fileNameParts?: string[];
+  items: DeliveryItem[];
+  sheetName?: string;
+}) {
   const rows = [
     ["납품처", "납품일", "번호", "간행물명", "간종", "발행일", "Vol-No.", "부수", "비고"],
-    ...group.items.map((item) => [
+    ...items.map((item) => [
       item.destinationName,
       item.deliveryDate,
       item.sequence,
@@ -128,8 +188,11 @@ export function downloadDeliveryGroup(group: DeliveryGroup) {
     { wch: 16 },
   ];
 
-  XLSX.utils.book_append_sheet(workbook, worksheet, safeSheetName(group.destinationName));
-  XLSX.writeFile(workbook, `${safeFileName(group.destinationName)}_${group.dateRange || "납품서"}.xlsx`);
+  XLSX.utils.book_append_sheet(workbook, worksheet, safeSheetName(sheetName));
+  XLSX.writeFile(
+    workbook,
+    `${fileNameParts.map(safeFileName).join("_")}_${dateRange || "납품서"}.xlsx`,
+  );
 }
 
 export async function getUploadFilesFromDrop(
@@ -330,6 +393,14 @@ function normalizeText(value: unknown) {
 
 function compareDocuments(a: DeliveryDocument, b: DeliveryDocument) {
   return a.deliveryDate.localeCompare(b.deliveryDate) || a.fileName.localeCompare(b.fileName, "ko");
+}
+
+function compareItems(a: DeliveryItem, b: DeliveryItem) {
+  return (
+    a.deliveryDate.localeCompare(b.deliveryDate) ||
+    a.sourceFile.localeCompare(b.sourceFile, "ko") ||
+    Number(a.sequence) - Number(b.sequence)
+  );
 }
 
 function buildDateRange(dates: string[]) {
