@@ -1,89 +1,104 @@
-import { DataTable } from "./DataTable";
-import type { SheetData, WorkbookData } from "../types";
-import { formatFileSize } from "../utils/format";
+import type { DeliveryGroup } from "../types";
+import { downloadDeliveryGroup } from "../utils/excel";
 
 type UploadAfterProps = {
-  activeSheet: SheetData | undefined;
-  activeWorkbook: WorkbookData | undefined;
-  onRemoveWorkbook: (workbookId: string) => void;
-  onSelectSheet: (workbookId: string, sheetName: string) => void;
-  onSelectWorkbook: (workbookId: string) => void;
-  workbooks: WorkbookData[];
+  groups: DeliveryGroup[];
 };
 
-export function UploadAfter({
-  activeSheet,
-  activeWorkbook,
-  onRemoveWorkbook,
-  onSelectSheet,
-  onSelectWorkbook,
-  workbooks,
-}: UploadAfterProps) {
-  return (
-    <section className="viewer-layout">
-      <aside className="file-list" aria-label="업로드된 파일">
-        <div className="section-heading">
-          <h2>업로드 파일</h2>
-          <span>{workbooks.length}개</span>
-        </div>
-        <div className="file-buttons">
-          {workbooks.map((workbook) => (
-            <button
-              key={workbook.id}
-              className={`file-button ${workbook.id === activeWorkbook?.id ? "active" : ""}`}
-              type="button"
-              onClick={() => onSelectWorkbook(workbook.id)}
-            >
-              <span>{workbook.fileName}</span>
-              <small>
-                {workbook.folderPath || "개별 업로드"} ·{" "}
-                {formatFileSize(workbook.fileSize)}
-              </small>
-            </button>
-          ))}
-        </div>
-      </aside>
+export function UploadAfter({ groups }: UploadAfterProps) {
+  const totalFileCount = groups.reduce(
+    (sum, group) => sum + group.documents.length,
+    0,
+  );
+  const totalItemCount = groups.reduce((sum, group) => sum + group.items.length, 0);
 
-      <section className="sheet-viewer" aria-label="파일 내용">
-        {activeWorkbook && activeSheet && (
-          <>
-            <div className="viewer-header">
+  return (
+    <section className="delivery-summary" aria-label="납품서 요약">
+      <header className="summary-header">
+        <div>
+          <p className="summary-kicker">납품서 정리 결과</p>
+          <h1>도서관별 납품 데이터</h1>
+        </div>
+        <div className="summary-stats" aria-label="전체 요약">
+          <span>{groups.length}개 납품처</span>
+          <span>{totalFileCount}개 파일</span>
+          <span>{totalItemCount}개 항목</span>
+        </div>
+      </header>
+
+      <div className="library-grid">
+        {groups.map((group) => (
+          <details className="library-card" key={group.id}>
+            <summary className="library-card-summary">
               <div>
-                <h2>{activeWorkbook.fileName}</h2>
+                <h2>{group.destinationName}</h2>
                 <p>
-                  {activeWorkbook.relativePath} · {activeWorkbook.sheets.length}
-                  개 시트 · {formatFileSize(activeWorkbook.fileSize)}
+                  {group.dateRange || "날짜 없음"} · {group.documents.length}개 파일 ·{" "}
+                  {group.items.length}개 항목 · 총 {group.totalQuantity}부
                 </p>
               </div>
+            </summary>
+
+            <div className="library-card-actions">
               <button
-                className="secondary-button"
+                className="download-button"
                 type="button"
-                onClick={() => onRemoveWorkbook(activeWorkbook.id)}
+                onClick={() => downloadDeliveryGroup(group)}
               >
-                제거
+                다운로드
               </button>
             </div>
 
-            <div className="sheet-tabs" role="tablist" aria-label="시트 목록">
-              {activeWorkbook.sheets.map((sheet) => (
-                <button
-                  key={sheet.name}
-                  className={`sheet-tab ${sheet.name === activeSheet.name ? "active" : ""}`}
-                  type="button"
-                  role="tab"
-                  aria-selected={sheet.name === activeSheet.name}
-                  onClick={() => onSelectSheet(activeWorkbook.id, sheet.name)}
-                >
-                  {sheet.name}
-                </button>
+            <div className="grouped-file-list" aria-label={`${group.destinationName} 파일 목록`}>
+              {group.documents.map((document) => (
+                <div className="grouped-file-item" key={document.id}>
+                  <div>
+                    <strong>{document.fileName}</strong>
+                    <span>{document.relativePath}</span>
+                  </div>
+                  <small>
+                    {document.deliveryDate} · {document.items.length}개 항목
+                  </small>
+                </div>
               ))}
             </div>
 
-            <DataTable sheet={activeSheet} />
-          </>
-        )}
-      </section>
+            <div className="preview-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>납품일</th>
+                    <th>간행물명</th>
+                    <th>간종</th>
+                    <th>발행일</th>
+                    <th>Vol-No.</th>
+                    <th>부수</th>
+                    <th>비고</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.items.slice(0, 8).map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.deliveryDate}</td>
+                      <td>{item.publicationName}</td>
+                      <td>{item.publicationType}</td>
+                      <td>{item.issueDate}</td>
+                      <td>{item.volumeNo}</td>
+                      <td>{item.quantity}</td>
+                      <td>{item.note}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {group.items.length > 8 && (
+                <p className="row-limit">
+                  화면에는 처음 8개 항목만 표시합니다. 전체 데이터는 다운로드 파일에 포함됩니다.
+                </p>
+              )}
+            </div>
+          </details>
+        ))}
+      </div>
     </section>
   );
 }
-

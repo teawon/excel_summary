@@ -1,34 +1,26 @@
 import { DragEvent, useMemo, useState } from "react";
+import { ErrorDropdown } from "./components/ErrorDropdown";
 import { UploadAfter } from "./components/UploadAfter";
 import { UploadBefore } from "./components/UploadBefore";
-import type { ParseError, UploadFile, WorkbookData } from "./types";
-import { getUploadFilesFromDrop, isExcelFile, readWorkbook } from "./utils/excel";
+import type { DeliveryDocument, ParseError, UploadFile } from "./types";
+import {
+  getUploadFilesFromDrop,
+  groupDeliveryDocuments,
+  isExcelFile,
+  parseDeliveryDocument,
+} from "./utils/excel";
 
 function App() {
-  const [workbooks, setWorkbooks] = useState<WorkbookData[]>([]);
+  const [documents, setDocuments] = useState<DeliveryDocument[]>([]);
   const [errors, setErrors] = useState<ParseError[]>([]);
-  const [activeWorkbookId, setActiveWorkbookId] = useState<string | null>(null);
-  const [activeSheetByWorkbook, setActiveSheetByWorkbook] = useState<
-    Record<string, string>
-  >({});
   const [isReading, setIsReading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
-  const activeWorkbook = useMemo(
-    () =>
-      workbooks.find((workbook) => workbook.id === activeWorkbookId) ??
-      workbooks[0],
-    [activeWorkbookId, workbooks],
+  const deliveryGroups = useMemo(
+    () => groupDeliveryDocuments(documents),
+    [documents],
   );
-
-  const activeSheetName = activeWorkbook
-    ? activeSheetByWorkbook[activeWorkbook.id]
-    : undefined;
-  const activeSheet =
-    activeWorkbook?.sheets.find((sheet) => sheet.name === activeSheetName) ??
-    activeWorkbook?.sheets[0];
-
-  const hasUploadedFiles = workbooks.length > 0;
+  const hasUploadedFiles = deliveryGroups.length > 0;
 
   const handleDrop = async (event: DragEvent<HTMLElement>) => {
     event.preventDefault();
@@ -60,14 +52,14 @@ function App() {
     }
 
     setIsReading(true);
-    const parsedWorkbooks: WorkbookData[] = [];
+    const parsedDocuments: DeliveryDocument[] = [];
     const parseErrors: ParseError[] = [];
 
     await Promise.all(
       excelFiles.map(async (uploadFile) => {
         try {
-          const workbook = await readWorkbook(uploadFile);
-          parsedWorkbooks.push(workbook);
+          const document = await parseDeliveryDocument(uploadFile);
+          parsedDocuments.push(document);
         } catch (error) {
           parseErrors.push({
             id: `${uploadFile.relativePath}-${uploadFile.file.lastModified}-error`,
@@ -81,46 +73,9 @@ function App() {
       }),
     );
 
-    setWorkbooks((current) => {
-      const next = [...current, ...parsedWorkbooks];
-
-      if (!activeWorkbookId && next[0]) {
-        setActiveWorkbookId(next[0].id);
-      }
-
-      return next;
-    });
-
-    setActiveSheetByWorkbook((current) => {
-      const next = { ...current };
-
-      for (const workbook of parsedWorkbooks) {
-        if (workbook.sheets[0]) {
-          next[workbook.id] = workbook.sheets[0].name;
-        }
-      }
-
-      return next;
-    });
-
-    if (parsedWorkbooks[0]) {
-      setActiveWorkbookId(parsedWorkbooks[0].id);
-    }
-
+    setDocuments((current) => [...current, ...parsedDocuments]);
     setErrors((current) => [...current, ...parseErrors]);
     setIsReading(false);
-  };
-
-  const handleRemoveWorkbook = (workbookId: string) => {
-    setWorkbooks((current) => {
-      const next = current.filter((workbook) => workbook.id !== workbookId);
-
-      if (activeWorkbookId === workbookId) {
-        setActiveWorkbookId(next[0]?.id ?? null);
-      }
-
-      return next;
-    });
   };
 
   return (
@@ -148,33 +103,12 @@ function App() {
         </div>
       )}
 
-      {errors.length > 0 && (
-        <section className="error-list" aria-label="파일 오류">
-          {errors.map((error) => (
-            <div key={error.id} className="error-item">
-              <strong>{error.fileName}</strong>
-              <span>{error.message}</span>
-            </div>
-          ))}
-        </section>
-      )}
+      <ErrorDropdown errors={errors} />
 
       {!hasUploadedFiles ? (
         <UploadBefore />
       ) : (
-        <UploadAfter
-          activeSheet={activeSheet}
-          activeWorkbook={activeWorkbook}
-          onRemoveWorkbook={handleRemoveWorkbook}
-          onSelectSheet={(workbookId, sheetName) =>
-            setActiveSheetByWorkbook((current) => ({
-              ...current,
-              [workbookId]: sheetName,
-            }))
-          }
-          onSelectWorkbook={setActiveWorkbookId}
-          workbooks={workbooks}
-        />
+        <UploadAfter groups={deliveryGroups} />
       )}
     </main>
   );

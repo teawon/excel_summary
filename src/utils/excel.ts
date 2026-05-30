@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import type { UploadFile, WorkbookData } from "../types";
+import type { DeliveryDocument, DeliveryGroup, DeliveryItem, UploadFile } from "../types";
 
 type DroppedEntry = {
   isFile: boolean;
@@ -29,54 +29,107 @@ type DataTransferItemWithEntry = {
   webkitGetAsEntry?: () => DroppedEntry | null;
 };
 
-export const maxPreviewRows = 200;
-
 const excelFilePattern = /\.(xlsx|xls|csv)$/i;
+const codeSuffixPattern = /\s+[A-Z]{2}\d{3,}$/;
 
-export async function readWorkbook({
+export async function parseDeliveryDocument({
   file,
   relativePath,
-}: UploadFile): Promise<WorkbookData> {
+}: UploadFile): Promise<DeliveryDocument> {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array" });
+  const parsedSheet = findDeliverySheet(workbook);
 
-  const sheets = workbook.SheetNames.map((sheetName) => {
-    const worksheet = workbook.Sheets[sheetName];
-    const rawRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
-      header: 1,
-      blankrows: false,
-      defval: "",
-    });
+  if (!parsedSheet) {
+    throw new Error("납품서 데이터 헤더를 찾지 못했습니다.");
+  }
 
-    const normalizedRows = rawRows.map((row) => row.map(formatCellValue));
-    const widestRow = Math.max(0, ...normalizedRows.map((row) => row.length));
-    const [firstRow, ...bodyRows] = normalizedRows;
-    const headers = Array.from({ length: widestRow }, (_, index) => {
-      const header = firstRow?.[index]?.trim();
-      return header || `열 ${index + 1}`;
-    });
-
-    return {
-      name: sheetName,
-      headers,
-      rows: bodyRows
-        .slice(0, maxPreviewRows)
-        .map((row) => padRow(row, widestRow)),
-    };
+  const { headerIndex, rows } = parsedSheet;
+  const destinationRaw = formatCellValue(readMetaValue(rows, headerIndex, "납품처"));
+  const deliveryDate = formatExcelDate(readMetaValue(rows, headerIndex, "납품일"));
+  const destinationName = normalizeDestinationName(destinationRaw || file.name);
+  const items = readDeliveryItems({
+    deliveryDate,
+    destinationName,
+    headerIndex,
+    relativePath,
+    rows,
   });
 
-  if (sheets.length === 0) {
-    throw new Error("시트를 찾을 수 없습니다.");
+  if (items.length === 0) {
+    throw new Error("납품서 행 데이터를 찾지 못했습니다.");
   }
 
   return {
-    id: `${relativePath}-${file.lastModified}-${crypto.randomUUID()}`,
+    id: `${relativePath}-${file.lastModified}`,
     fileName: file.name,
-    folderPath: getFolderPath(relativePath),
     relativePath,
-    fileSize: file.size,
-    sheets,
+    destinationName,
+    destinationRaw,
+    deliveryDate,
+    items,
   };
+}
+
+export function groupDeliveryDocuments(documents: DeliveryDocument[]): DeliveryGroup[] {
+  const groupsByDestination = new Map<string, DeliveryDocument[]>();
+
+  for (const document of documents) {
+    const current = groupsByDestination.get(document.destinationName) ?? [];
+    current.push(document);
+    groupsByDestination.set(document.destinationName, current);
+  }
+
+  return Array.from(groupsByDestination.entries())
+    .map(([destinationName, groupDocuments]) => {
+      const documentsByDate = [...groupDocuments].sort(compareDocuments);
+      const items = documentsByDate.flatMap((document) => document.items);
+      const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+
+      return {
+        id: destinationName,
+        destinationName,
+        documents: documentsByDate,
+        items,
+        totalQuantity,
+        dateRange: buildDateRange(documentsByDate.map((document) => document.deliveryDate)),
+      };
+    })
+    .sort((a, b) => a.destinationName.localeCompare(b.destinationName, "ko"));
+}
+
+export function downloadDeliveryGroup(group: DeliveryGroup) {
+  const rows = [
+    ["납품처", "납품일", "번호", "간행물명", "간종", "발행일", "Vol-No.", "부수", "비고"],
+    ...group.items.map((item) => [
+      item.destinationName,
+      item.deliveryDate,
+      item.sequence,
+      item.publicationName,
+      item.publicationType,
+      item.issueDate,
+      item.volumeNo,
+      item.quantity,
+      item.note,
+    ]),
+  ];
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+  const workbook = XLSX.utils.book_new();
+
+  worksheet["!cols"] = [
+    { wch: 18 },
+    { wch: 12 },
+    { wch: 8 },
+    { wch: 34 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 8 },
+    { wch: 16 },
+  ];
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, safeSheetName(group.destinationName));
+  XLSX.writeFile(workbook, `${safeFileName(group.destinationName)}_${group.dateRange || "납품서"}.xlsx`);
 }
 
 export async function getUploadFilesFromDrop(
@@ -100,6 +153,86 @@ export async function getUploadFilesFromDrop(
 
 export function isExcelFile(file: File) {
   return excelFilePattern.test(file.name) && !file.name.startsWith("~$");
+}
+
+function findDeliverySheet(workbook: XLSX.WorkBook) {
+  for (const sheetName of workbook.SheetNames) {
+    const worksheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+      header: 1,
+      blankrows: false,
+      defval: "",
+    });
+    const headerIndex = rows.findIndex(isDeliveryHeaderRow);
+
+    if (headerIndex >= 0) {
+      return { headerIndex, rows };
+    }
+  }
+
+  return null;
+}
+
+function isDeliveryHeaderRow(row: unknown[]) {
+  return normalizeText(row[0]) === "번호" && normalizeText(row[1]).includes("간행물명");
+}
+
+function readMetaValue(rows: unknown[][], headerIndex: number, label: string) {
+  const metaRows = rows.slice(0, headerIndex);
+  const row = metaRows.find((candidate) => normalizeText(candidate[0]).startsWith(label));
+  return row?.[1] ?? "";
+}
+
+function readDeliveryItems({
+  deliveryDate,
+  destinationName,
+  headerIndex,
+  relativePath,
+  rows,
+}: {
+  deliveryDate: string;
+  destinationName: string;
+  headerIndex: number;
+  relativePath: string;
+  rows: unknown[][];
+}): DeliveryItem[] {
+  const fileName = getFileName(relativePath);
+  const items: DeliveryItem[] = [];
+
+  for (const row of rows.slice(headerIndex + 1)) {
+    const firstCell = normalizeText(row[0]);
+
+    if (!row.some((cell) => normalizeText(cell) !== "")) {
+      continue;
+    }
+
+    if (firstCell.includes("합") && firstCell.includes("계")) {
+      break;
+    }
+
+    const publicationName = formatCellValue(row[1]);
+
+    if (!publicationName) {
+      continue;
+    }
+
+    items.push({
+      id: `${relativePath}-${items.length}`,
+      sourceFile: fileName,
+      sourcePath: relativePath,
+      destinationName,
+      deliveryDate,
+      sequence: formatCellValue(row[0]),
+      publicationName,
+      publicationType: formatCellValue(row[2]),
+      issueDate: formatExcelDate(row[3]),
+      volumeNo: formatCellValue(row[4]),
+      quantity: Number(row[5]) || 0,
+      note: formatCellValue(row[6]),
+    });
+  }
+
+  return items;
 }
 
 function fileToUploadFile(file: File): UploadFile {
@@ -165,20 +298,59 @@ function formatCellValue(value: unknown): string {
     return "";
   }
 
-  if (value instanceof Date) {
-    return value.toLocaleDateString("ko-KR");
+  return String(value).trim();
+}
+
+function formatExcelDate(value: unknown): string {
+  if (typeof value === "number") {
+    return XLSX.SSF.format("yyyy-mm-dd", value);
   }
 
-  return String(value);
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  return formatCellValue(value);
 }
 
-function padRow(row: string[], length: number) {
-  return Array.from({ length }, (_, index) => row[index] ?? "");
+function normalizeDestinationName(value: unknown) {
+  return formatCellValue(value).replace(codeSuffixPattern, "").trim();
 }
 
-function getFolderPath(relativePath: string) {
-  const parts = relativePath.split("/");
-  parts.pop();
-  return parts.join("/");
+function normalizeText(value: unknown) {
+  return formatCellValue(value).replace(/\s+/g, "");
 }
 
+function compareDocuments(a: DeliveryDocument, b: DeliveryDocument) {
+  return a.deliveryDate.localeCompare(b.deliveryDate) || a.fileName.localeCompare(b.fileName, "ko");
+}
+
+function buildDateRange(dates: string[]) {
+  const filteredDates = dates.filter(Boolean).sort();
+
+  if (filteredDates.length === 0) {
+    return "";
+  }
+
+  const first = toCompactDate(filteredDates[0]);
+  const last = toCompactDate(filteredDates[filteredDates.length - 1]);
+
+  return first === last ? first : `${first}-${last}`;
+}
+
+function toCompactDate(date: string) {
+  const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[2]}${match[3]}` : date;
+}
+
+function getFileName(relativePath: string) {
+  return relativePath.split("/").pop() ?? relativePath;
+}
+
+function safeFileName(fileName: string) {
+  return fileName.replace(/[\\/:*?"<>|]/g, "_");
+}
+
+function safeSheetName(sheetName: string) {
+  return sheetName.replace(/[\\/?*[\]:]/g, " ").slice(0, 31) || "납품서";
+}
