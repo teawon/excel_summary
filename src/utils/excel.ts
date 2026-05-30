@@ -70,6 +70,7 @@ export async function parseDeliveryDocument({
   return {
     id: `${relativePath}-${file.lastModified}`,
     fileName: file.name,
+    fileSize: file.size,
     relativePath,
     destinationName,
     destinationRaw,
@@ -204,11 +205,10 @@ function downloadDeliveryItems({
   sheetName?: string;
 }) {
   const rows = [
-    ["납품처", "납품일", "번호", "간행물명", "간종", "발행일", "Vol-No.", "부수", "비고"],
+    ["납품처", "납품일", "간행물명", "간종", "발행일", "Vol-No.", "부수", "비고"],
     ...items.map((item) => [
       item.destinationName,
       item.deliveryDate,
-      item.sequence,
       item.publicationName,
       item.publicationType,
       item.issueDate,
@@ -223,7 +223,6 @@ function downloadDeliveryItems({
   worksheet["!cols"] = [
     { wch: 18 },
     { wch: 12 },
-    { wch: 8 },
     { wch: 34 },
     { wch: 12 },
     { wch: 12 },

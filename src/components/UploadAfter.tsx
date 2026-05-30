@@ -264,7 +264,6 @@ function PreviewModal({
               <tr>
                 <th>납품처</th>
                 <th>납품일</th>
-                <th>번호</th>
                 <th>간행물명</th>
                 <th>간종</th>
                 <th>발행일</th>
@@ -278,7 +277,6 @@ function PreviewModal({
                 <tr key={item.id}>
                   <td>{item.destinationName}</td>
                   <td>{item.deliveryDate}</td>
-                  <td>{item.sequence}</td>
                   <td>{item.publicationName}</td>
                   <td>{item.publicationType}</td>
                   <td>{item.issueDate}</td>

@@ -6,9 +6,8 @@ export function UploadBefore() {
           +
         </span>
         <h1>파일을 올려주세요</h1>
-        <p>각 분기별 폴더를 하나로 묶어 드래그 후 올려주세요</p>
+        <p>날짜별 납품서 폴더를 드래그해 올려주세요</p>
       </div>
     </section>
   );
 }
-

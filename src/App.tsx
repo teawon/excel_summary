@@ -10,11 +10,25 @@ import {
   parseDeliveryDocument,
 } from "./utils/excel";
 
+type DuplicateCandidate = {
+  fileName: string;
+  relativePath: string;
+  fileSize: number;
+  matches: string[];
+};
+
+type PendingDuplicateUpload = {
+  files: UploadFile[];
+  candidates: DuplicateCandidate[];
+};
+
 function App() {
   const [documents, setDocuments] = useState<DeliveryDocument[]>([]);
   const [errors, setErrors] = useState<ParseError[]>([]);
   const [isReading, setIsReading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [pendingDuplicateUpload, setPendingDuplicateUpload] =
+    useState<PendingDuplicateUpload | null>(null);
 
   const deliveryGroups = useMemo(
     () => groupDeliveryDocuments(documents),
@@ -29,6 +43,16 @@ function App() {
     const files = await getUploadFilesFromDrop(event.dataTransfer);
 
     if (files.length === 0) {
+      return;
+    }
+
+    const duplicateCandidates = findDuplicateCandidates(files, documents);
+
+    if (duplicateCandidates.length > 0) {
+      setPendingDuplicateUpload({
+        files,
+        candidates: duplicateCandidates,
+      });
       return;
     }
 
@@ -82,6 +106,7 @@ function App() {
     setDocuments([]);
     setErrors([]);
     setIsDragging(false);
+    setPendingDuplicateUpload(null);
   };
 
   return (
@@ -109,6 +134,18 @@ function App() {
         </div>
       )}
 
+      {pendingDuplicateUpload && (
+        <DuplicateWarningModal
+          candidates={pendingDuplicateUpload.candidates}
+          onCancel={() => setPendingDuplicateUpload(null)}
+          onConfirm={() => {
+            const files = pendingDuplicateUpload.files;
+            setPendingDuplicateUpload(null);
+            void parseUploadFiles(files);
+          }}
+        />
+      )}
+
       <ErrorDropdown errors={errors} />
 
       {!hasUploadedFiles ? (
@@ -118,6 +155,138 @@ function App() {
       )}
     </main>
   );
+}
+
+function DuplicateWarningModal({
+  candidates,
+  onCancel,
+  onConfirm,
+}: {
+  candidates: DuplicateCandidate[];
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onCancel}>
+      <section
+        className="duplicate-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="중복 의심 파일 확인"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="modal-header">
+          <div>
+            <h2>중복 의심 파일이 있습니다</h2>
+            <p>백업본으로 보이는 파일명이 있어 확인이 필요합니다.</p>
+          </div>
+        </header>
+
+        <div className="duplicate-list">
+          {candidates.map((candidate) => (
+            <div className="duplicate-item" key={`${candidate.relativePath}-${candidate.fileSize}`}>
+              <div className="duplicate-row">
+                <span className="duplicate-label">파일</span>
+                <div>
+                  <strong>{candidate.fileName}</strong>
+                  <span>{candidate.relativePath}</span>
+                </div>
+              </div>
+              <div className="duplicate-row suspicious">
+                <span className="duplicate-label">의심되는 파일</span>
+                <div>
+                  {candidate.matches.map((match) => (
+                    <span key={match}>{match}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="modal-actions">
+          <button className="preview-button" type="button" onClick={onCancel}>
+            취소
+          </button>
+          <button className="download-button" type="button" onClick={onConfirm}>
+            그래도 업로드
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function findDuplicateCandidates(
+  files: UploadFile[],
+  existingDocuments: DeliveryDocument[],
+): DuplicateCandidate[] {
+  const excelFiles = files.filter(({ file }) => isExcelFile(file));
+  const seenFiles = new Map<string, { displayName: string; path: string }[]>();
+  const candidates: DuplicateCandidate[] = [];
+
+  for (const document of existingDocuments) {
+    const key = buildBackupCandidateKey(document.fileName);
+    const current = seenFiles.get(key) ?? [];
+    current.push({ displayName: document.fileName, path: document.relativePath });
+    seenFiles.set(key, current);
+  }
+
+  for (const uploadFile of excelFiles) {
+    const key = buildBackupCandidateKey(uploadFile.file.name);
+    const matches = seenFiles.get(key) ?? [];
+    const backupLike = isBackupLikeFileName(uploadFile.file.name);
+    const matchingBackups = matches.filter((match) => isBackupLikeFileName(match.displayName));
+
+    if ((backupLike && matches.length > 0) || matchingBackups.length > 0) {
+      candidates.push({
+        fileName: uploadFile.file.name,
+        relativePath: uploadFile.relativePath,
+        fileSize: uploadFile.file.size,
+        matches: matches.map((match) => match.path),
+      });
+    }
+
+    seenFiles.set(key, [
+      ...matches,
+      { displayName: uploadFile.file.name, path: uploadFile.relativePath },
+    ]);
+  }
+
+  return candidates;
+}
+
+function buildBackupCandidateKey(fileName: string) {
+  const normalizedName = normalizeFileNameBase(fileName)
+    .replace(/\bversion\s*\d+\b/g, "")
+    .replace(/\bv\s*\d+\b/g, "")
+    .replace(/\bcopy\s*\d*\b/g, "")
+    .replace(/복사본\d*/g, "")
+    .replace(/\(\d+\)$/g, "")
+    .replace(/\[\d+\]$/g, "")
+    .replace(/[\s_\-().[\]]/g, "");
+
+  return normalizedName;
+}
+
+function isBackupLikeFileName(fileName: string) {
+  const normalizedName = normalizeFileNameBase(fileName);
+
+  return (
+    /\bversion\s*\d+\b/.test(normalizedName) ||
+    /\bv\s*\d+\b/.test(normalizedName) ||
+    /\bcopy\s*\d*\b/.test(normalizedName) ||
+    /복사본\d*/.test(normalizedName) ||
+    /\(\d+\)$/.test(normalizedName) ||
+    /\[\d+\]$/.test(normalizedName)
+  );
+}
+
+function normalizeFileNameBase(fileName: string) {
+  return fileName
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/\.(xlsx|xls|csv)$/i, "");
 }
 
 export default App;

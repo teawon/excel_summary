@@ -27,6 +27,7 @@ export type DeliveryItem = {
 export type DeliveryDocument = {
   id: string;
   fileName: string;
+  fileSize: number;
   relativePath: string;
   destinationName: string;
   destinationRaw: string;
