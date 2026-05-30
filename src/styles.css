@@ -266,6 +266,25 @@ h1 {
   gap: 20px;
 }
 
+.floating-reset-button {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: #264653;
+  color: #ffffff;
+  box-shadow: 0 12px 28px rgba(29, 39, 51, 0.22);
+  cursor: pointer;
+  font-weight: 800;
+}
+
 .summary-header {
   display: flex;
   align-items: flex-end;
@@ -371,7 +390,6 @@ h1 {
   display: grid;
   gap: 8px;
   padding: 14px 22px;
-  border-bottom: 1px solid #e1e7ea;
   background: #fbfcfc;
 }
 

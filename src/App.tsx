@@ -78,6 +78,12 @@ function App() {
     setIsReading(false);
   };
 
+  const handleReset = () => {
+    setDocuments([]);
+    setErrors([]);
+    setIsDragging(false);
+  };
+
   return (
     <main
       className={`app-shell ${isDragging ? "dragging" : ""}`}
@@ -108,7 +114,7 @@ function App() {
       {!hasUploadedFiles ? (
         <UploadBefore />
       ) : (
-        <UploadAfter groups={deliveryGroups} />
+        <UploadAfter groups={deliveryGroups} onReset={handleReset} />
       )}
     </main>
   );

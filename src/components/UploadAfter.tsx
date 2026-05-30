@@ -3,9 +3,10 @@ import { downloadDeliveryGroup } from "../utils/excel";
 
 type UploadAfterProps = {
   groups: DeliveryGroup[];
+  onReset: () => void;
 };
 
-export function UploadAfter({ groups }: UploadAfterProps) {
+export function UploadAfter({ groups, onReset }: UploadAfterProps) {
   const totalFileCount = groups.reduce(
     (sum, group) => sum + group.documents.length,
     0,
@@ -14,6 +15,10 @@ export function UploadAfter({ groups }: UploadAfterProps) {
 
   return (
     <section className="delivery-summary" aria-label="납품서 요약">
+      <button className="floating-reset-button" type="button" onClick={onReset}>
+        처음으로
+      </button>
+
       <header className="summary-header">
         <div>
           <p className="summary-kicker">납품서 정리 결과</p>
@@ -61,40 +66,6 @@ export function UploadAfter({ groups }: UploadAfterProps) {
                   </small>
                 </div>
               ))}
-            </div>
-
-            <div className="preview-table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>납품일</th>
-                    <th>간행물명</th>
-                    <th>간종</th>
-                    <th>발행일</th>
-                    <th>Vol-No.</th>
-                    <th>부수</th>
-                    <th>비고</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {group.items.slice(0, 8).map((item) => (
-                    <tr key={item.id}>
-                      <td>{item.deliveryDate}</td>
-                      <td>{item.publicationName}</td>
-                      <td>{item.publicationType}</td>
-                      <td>{item.issueDate}</td>
-                      <td>{item.volumeNo}</td>
-                      <td>{item.quantity}</td>
-                      <td>{item.note}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {group.items.length > 8 && (
-                <p className="row-limit">
-                  화면에는 처음 8개 항목만 표시합니다. 전체 데이터는 다운로드 파일에 포함됩니다.
-                </p>
-              )}
             </div>
           </details>
         ))}

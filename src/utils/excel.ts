@@ -47,7 +47,7 @@ export async function parseDeliveryDocument({
   const { headerIndex, rows } = parsedSheet;
   const destinationRaw = formatCellValue(readMetaValue(rows, headerIndex, "납품처"));
   const deliveryDate = formatExcelDate(readMetaValue(rows, headerIndex, "납품일"));
-  const destinationName = normalizeDestinationName(destinationRaw || file.name);
+  const destinationName = normalizeDestinationName(destinationRaw || file.name, relativePath);
   const items = readDeliveryItems({
     deliveryDate,
     destinationName,
@@ -313,8 +313,15 @@ function formatExcelDate(value: unknown): string {
   return formatCellValue(value);
 }
 
-function normalizeDestinationName(value: unknown) {
-  return formatCellValue(value).replace(codeSuffixPattern, "").trim();
+function normalizeDestinationName(value: unknown, relativePath: string) {
+  const baseName = formatCellValue(value).replace(codeSuffixPattern, "").trim();
+  const category = extractDestinationCategory(relativePath);
+
+  if (!category || baseName.includes(`(${category})`)) {
+    return baseName;
+  }
+
+  return `${baseName}(${category})`;
 }
 
 function normalizeText(value: unknown) {
@@ -345,6 +352,12 @@ function toCompactDate(date: string) {
 
 function getFileName(relativePath: string) {
   return relativePath.split("/").pop() ?? relativePath;
+}
+
+function extractDestinationCategory(relativePath: string) {
+  const normalizedPath = relativePath.replace(/\s+/g, "");
+  const match = normalizedPath.match(/국립중앙도서관\((신문|잡지)\)/);
+  return match?.[1] ?? "";
 }
 
 function safeFileName(fileName: string) {
