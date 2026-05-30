@@ -50,3 +50,12 @@ export type PublicationGroup = {
   totalQuantity: number;
   dateRange: string;
 };
+
+export type QuarterGroup = {
+  id: string;
+  label: string;
+  documents: DeliveryDocument[];
+  items: DeliveryItem[];
+  totalQuantity: number;
+  dateRange: string;
+};

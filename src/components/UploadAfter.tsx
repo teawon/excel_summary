@@ -3,6 +3,7 @@ import type { DeliveryGroup } from "../types";
 import {
   downloadDeliveryGroup,
   downloadPublicationGroup,
+  groupDeliveryByQuarter,
   groupItemsByPublication,
 } from "../utils/excel";
 
@@ -12,6 +13,7 @@ type UploadAfterProps = {
 };
 
 export function UploadAfter({ groups, onReset }: UploadAfterProps) {
+  const [activeQuarterByGroup, setActiveQuarterByGroup] = useState<Record<string, string>>({});
   const [activeTabByGroup, setActiveTabByGroup] = useState<Record<string, "publications" | "files">>({});
   const totalFileCount = groups.reduce(
     (sum, group) => sum + group.documents.length,
@@ -39,8 +41,18 @@ export function UploadAfter({ groups, onReset }: UploadAfterProps) {
 
       <div className="library-grid">
         {groups.map((group) => {
-          const activeTab = activeTabByGroup[group.id] ?? "publications";
-          const publicationGroups = groupItemsByPublication(group.items);
+          const quarterGroups = groupDeliveryByQuarter(group);
+          const allPublicationCount = groupItemsByPublication(group.items).length;
+          const activeQuarterId = activeQuarterByGroup[group.id] ?? quarterGroups[0]?.id ?? "";
+          const activeQuarter = quarterGroups.find((quarter) => quarter.id === activeQuarterId) ?? quarterGroups[0];
+          const scopedId = `${group.id}-${activeQuarter?.id ?? "all"}`;
+          const activeTab = activeTabByGroup[scopedId] ?? "publications";
+          const scopedItems = activeQuarter?.items ?? group.items;
+          const scopedDocuments = activeQuarter?.documents ?? group.documents;
+          const publicationGroups = groupItemsByPublication(scopedItems);
+          const scopedDateRange = activeQuarter?.dateRange ?? group.dateRange;
+          const scopedTotalQuantity =
+            activeQuarter?.totalQuantity ?? group.totalQuantity;
 
           return (
             <details className="library-card" key={group.id}>
@@ -49,11 +61,32 @@ export function UploadAfter({ groups, onReset }: UploadAfterProps) {
                   <h2>{group.destinationName}</h2>
                   <p>
                     {group.dateRange || "날짜 없음"} · {group.documents.length}개 파일 ·{" "}
-                    {publicationGroups.length}개 간행물 · {group.items.length}개 항목 · 총{" "}
+                    {allPublicationCount}개 간행물 · {group.items.length}개 항목 · 총{" "}
                     {group.totalQuantity}부
                   </p>
                 </div>
               </summary>
+
+              <div className="quarter-tabs" role="tablist" aria-label={`${group.destinationName} 분기 전환`}>
+                {quarterGroups.map((quarterGroup) => (
+                  <button
+                    className={`quarter-tab ${activeQuarter?.id === quarterGroup.id ? "active" : ""}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeQuarter?.id === quarterGroup.id}
+                    key={quarterGroup.id}
+                    onClick={() =>
+                      setActiveQuarterByGroup((current) => ({
+                        ...current,
+                        [group.id]: quarterGroup.id,
+                      }))
+                    }
+                  >
+                    {quarterGroup.label} {quarterGroup.dateRange ? `(${formatDisplayDateRange(quarterGroup.dateRange)})` : ""}
+                    <span>{quarterGroup.documents.length}개 파일</span>
+                  </button>
+                ))}
+              </div>
 
               <div className="library-tabs" role="tablist" aria-label={`${group.destinationName} 보기 전환`}>
                 <button
@@ -64,7 +97,7 @@ export function UploadAfter({ groups, onReset }: UploadAfterProps) {
                   onClick={() =>
                     setActiveTabByGroup((current) => ({
                       ...current,
-                      [group.id]: "publications",
+                      [scopedId]: "publications",
                     }))
                   }
                 >
@@ -78,7 +111,7 @@ export function UploadAfter({ groups, onReset }: UploadAfterProps) {
                   onClick={() =>
                     setActiveTabByGroup((current) => ({
                       ...current,
-                      [group.id]: "files",
+                      [scopedId]: "files",
                     }))
                   }
                 >
@@ -111,14 +144,22 @@ export function UploadAfter({ groups, onReset }: UploadAfterProps) {
                     <div>
                       <strong>전체 통합본</strong>
                       <span>
-                        {group.dateRange || "날짜 없음"} · {group.items.length}개 항목 · 총{" "}
-                        {group.totalQuantity}부
+                        {scopedDateRange || "날짜 없음"} · {scopedItems.length}개 항목 · 총{" "}
+                        {scopedTotalQuantity}부
                       </span>
                     </div>
                     <button
                       className="download-button"
                       type="button"
-                      onClick={() => downloadDeliveryGroup(group)}
+                      onClick={() =>
+                        downloadDeliveryGroup({
+                          ...group,
+                          documents: scopedDocuments,
+                          items: scopedItems,
+                          totalQuantity: scopedTotalQuantity,
+                          dateRange: scopedDateRange,
+                        })
+                      }
                     >
                       다운로드
                     </button>
@@ -126,7 +167,7 @@ export function UploadAfter({ groups, onReset }: UploadAfterProps) {
                 </div>
               ) : (
                 <div className="grouped-file-list" aria-label={`${group.destinationName} 파일 목록`}>
-                  {group.documents.map((document) => (
+                  {scopedDocuments.map((document) => (
                     <div className="grouped-file-item" key={document.id}>
                       <div>
                         <strong>{document.fileName}</strong>
@@ -145,4 +186,19 @@ export function UploadAfter({ groups, onReset }: UploadAfterProps) {
       </div>
     </section>
   );
+}
+
+function formatDisplayDateRange(dateRange: string) {
+  return dateRange
+    .split("-")
+    .map((date) => {
+      const compactDate = date.trim();
+
+      if (!/^\d{4}$/.test(compactDate)) {
+        return compactDate;
+      }
+
+      return `${Number(compactDate.slice(0, 2))}/${Number(compactDate.slice(2))}`;
+    })
+    .join("-");
 }

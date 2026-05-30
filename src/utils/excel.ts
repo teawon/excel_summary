@@ -4,6 +4,7 @@ import type {
   DeliveryGroup,
   DeliveryItem,
   PublicationGroup,
+  QuarterGroup,
   UploadFile,
 } from "../types";
 
@@ -134,6 +135,49 @@ export function groupItemsByPublication(items: DeliveryItem[]): PublicationGroup
       };
     })
     .sort((a, b) => a.publicationName.localeCompare(b.publicationName, "ko"));
+}
+
+export function groupDeliveryByQuarter(group: DeliveryGroup): QuarterGroup[] {
+  const quarterMap = new Map<string, QuarterGroup>();
+
+  for (const document of group.documents) {
+    const quarter = getQuarter(document.deliveryDate);
+
+    if (!quarter) {
+      continue;
+    }
+
+    const current =
+      quarterMap.get(quarter.id) ??
+      {
+        id: quarter.id,
+        label: quarter.label,
+        documents: [],
+        items: [],
+        totalQuantity: 0,
+        dateRange: "",
+      };
+
+    current.documents.push(document);
+    current.items.push(...document.items);
+    quarterMap.set(quarter.id, current);
+  }
+
+  return ["q1", "q2", "q3", "q4"]
+    .map((quarterId) => quarterMap.get(quarterId))
+    .filter((quarterGroup): quarterGroup is QuarterGroup => Boolean(quarterGroup))
+    .map((quarterGroup) => {
+      const documents = [...quarterGroup.documents].sort(compareDocuments);
+      const items = [...quarterGroup.items].sort(compareItems);
+
+      return {
+        ...quarterGroup,
+        documents,
+        items,
+        totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
+        dateRange: buildDateRange(documents.map((document) => document.deliveryDate)),
+      };
+    });
 }
 
 export function downloadPublicationGroup(destinationName: string, group: PublicationGroup) {
@@ -419,6 +463,28 @@ function buildDateRange(dates: string[]) {
 function toCompactDate(date: string) {
   const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return match ? `${match[2]}${match[3]}` : date;
+}
+
+function getQuarter(date: string) {
+  const month = Number(date.match(/^\d{4}-(\d{2})-\d{2}$/)?.[1]);
+
+  if (!month) {
+    return null;
+  }
+
+  if (month <= 3) {
+    return { id: "q1", label: "1분기" };
+  }
+
+  if (month <= 6) {
+    return { id: "q2", label: "2분기" };
+  }
+
+  if (month <= 9) {
+    return { id: "q3", label: "3분기" };
+  }
+
+  return { id: "q4", label: "4분기" };
 }
 
 function getFileName(relativePath: string) {
