@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { DeliveryGroup } from "../types";
+import type { DeliveryGroup, DeliveryItem } from "../types";
 import {
   downloadDeliveryGroup,
   downloadPublicationGroup,
@@ -12,9 +12,15 @@ type UploadAfterProps = {
   onReset: () => void;
 };
 
+type PreviewTarget = {
+  title: string;
+  items: DeliveryItem[];
+};
+
 export function UploadAfter({ groups, onReset }: UploadAfterProps) {
   const [activeQuarterByGroup, setActiveQuarterByGroup] = useState<Record<string, string>>({});
   const [activeTabByGroup, setActiveTabByGroup] = useState<Record<string, "publications" | "files">>({});
+  const [previewTarget, setPreviewTarget] = useState<PreviewTarget | null>(null);
   const totalFileCount = groups.reduce(
     (sum, group) => sum + group.documents.length,
     0,
@@ -26,6 +32,14 @@ export function UploadAfter({ groups, onReset }: UploadAfterProps) {
       <button className="floating-reset-button" type="button" onClick={onReset}>
         처음으로
       </button>
+
+      {previewTarget && (
+        <PreviewModal
+          items={previewTarget.items}
+          onClose={() => setPreviewTarget(null)}
+          title={previewTarget.title}
+        />
+      )}
 
       <header className="summary-header">
         <div>
@@ -130,13 +144,27 @@ export function UploadAfter({ groups, onReset }: UploadAfterProps) {
                           {publicationGroup.items.length}개 항목 · 총 {publicationGroup.totalQuantity}부
                         </span>
                       </div>
-                      <button
-                        className="download-button"
-                        type="button"
-                        onClick={() => downloadPublicationGroup(group.destinationName, publicationGroup)}
-                      >
-                        다운로드
-                      </button>
+                      <div className="item-actions">
+                        <button
+                          className="preview-button"
+                          type="button"
+                          onClick={() =>
+                            setPreviewTarget({
+                              title: `${group.destinationName} - ${publicationGroup.publicationName}`,
+                              items: publicationGroup.items,
+                            })
+                          }
+                        >
+                          미리보기
+                        </button>
+                        <button
+                          className="download-button"
+                          type="button"
+                          onClick={() => downloadPublicationGroup(group.destinationName, publicationGroup)}
+                        >
+                          다운로드
+                        </button>
+                      </div>
                     </div>
                   ))}
 
@@ -148,21 +176,35 @@ export function UploadAfter({ groups, onReset }: UploadAfterProps) {
                         {scopedTotalQuantity}부
                       </span>
                     </div>
-                    <button
-                      className="download-button"
-                      type="button"
-                      onClick={() =>
-                        downloadDeliveryGroup({
-                          ...group,
-                          documents: scopedDocuments,
-                          items: scopedItems,
-                          totalQuantity: scopedTotalQuantity,
-                          dateRange: scopedDateRange,
-                        })
-                      }
-                    >
-                      다운로드
-                    </button>
+                    <div className="item-actions">
+                      <button
+                        className="preview-button"
+                        type="button"
+                        onClick={() =>
+                          setPreviewTarget({
+                            title: `${group.destinationName} - 전체 통합본`,
+                            items: scopedItems,
+                          })
+                        }
+                      >
+                        미리보기
+                      </button>
+                      <button
+                        className="download-button"
+                        type="button"
+                        onClick={() =>
+                          downloadDeliveryGroup({
+                            ...group,
+                            documents: scopedDocuments,
+                            items: scopedItems,
+                            totalQuantity: scopedTotalQuantity,
+                            dateRange: scopedDateRange,
+                          })
+                        }
+                      >
+                        다운로드
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -185,6 +227,71 @@ export function UploadAfter({ groups, onReset }: UploadAfterProps) {
         })}
       </div>
     </section>
+  );
+}
+
+function PreviewModal({
+  items,
+  onClose,
+  title,
+}: {
+  items: DeliveryItem[];
+  onClose: () => void;
+  title: string;
+}) {
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <section
+        className="preview-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${title} 미리보기`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="modal-header">
+          <div>
+            <h2>{title}</h2>
+            <p>{items.length}개 항목</p>
+          </div>
+          <button className="modal-close-button" type="button" onClick={onClose}>
+            닫기
+          </button>
+        </header>
+
+        <div className="modal-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>납품처</th>
+                <th>납품일</th>
+                <th>번호</th>
+                <th>간행물명</th>
+                <th>간종</th>
+                <th>발행일</th>
+                <th>Vol-No.</th>
+                <th>부수</th>
+                <th>비고</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.destinationName}</td>
+                  <td>{item.deliveryDate}</td>
+                  <td>{item.sequence}</td>
+                  <td>{item.publicationName}</td>
+                  <td>{item.publicationType}</td>
+                  <td>{item.issueDate}</td>
+                  <td>{item.volumeNo}</td>
+                  <td>{item.quantity}</td>
+                  <td>{item.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   );
 }
 
