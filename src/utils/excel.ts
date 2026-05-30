@@ -44,10 +44,10 @@ export async function parseDeliveryDocument({
     throw new Error("납품서 데이터 헤더를 찾지 못했습니다.");
   }
 
-  const { headerIndex, rows } = parsedSheet;
+  const { headerIndex, rows, sheetName } = parsedSheet;
   const destinationRaw = formatCellValue(readMetaValue(rows, headerIndex, "납품처"));
   const deliveryDate = formatExcelDate(readMetaValue(rows, headerIndex, "납품일"));
-  const destinationName = normalizeDestinationName(destinationRaw || file.name, relativePath);
+  const destinationName = normalizeDestinationName(destinationRaw || file.name, relativePath, sheetName);
   const items = readDeliveryItems({
     deliveryDate,
     destinationName,
@@ -166,7 +166,7 @@ function findDeliverySheet(workbook: XLSX.WorkBook) {
     const headerIndex = rows.findIndex(isDeliveryHeaderRow);
 
     if (headerIndex >= 0) {
-      return { headerIndex, rows };
+      return { headerIndex, rows, sheetName };
     }
   }
 
@@ -313,9 +313,9 @@ function formatExcelDate(value: unknown): string {
   return formatCellValue(value);
 }
 
-function normalizeDestinationName(value: unknown, relativePath: string) {
+function normalizeDestinationName(value: unknown, relativePath: string, sheetName: string) {
   const baseName = formatCellValue(value).replace(codeSuffixPattern, "").trim();
-  const category = extractDestinationCategory(relativePath);
+  const category = extractDestinationCategory(`${relativePath} ${sheetName}`);
 
   if (!category || baseName.includes(`(${category})`)) {
     return baseName;
@@ -355,7 +355,7 @@ function getFileName(relativePath: string) {
 }
 
 function extractDestinationCategory(relativePath: string) {
-  const normalizedPath = relativePath.replace(/\s+/g, "");
+  const normalizedPath = relativePath.normalize("NFC").replace(/\s+/g, "");
   const match = normalizedPath.match(/국립중앙도서관\((신문|잡지)\)/);
   return match?.[1] ?? "";
 }
