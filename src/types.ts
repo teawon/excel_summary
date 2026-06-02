@@ -4,6 +4,13 @@ export type ParseError = {
   message: string;
 };
 
+export type FilteredItem = {
+  id: string;
+  fileName: string;
+  relativePath: string;
+  reason: string;
+};
+
 export type UploadFile = {
   file: File;
   relativePath: string;
