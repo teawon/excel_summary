@@ -118,18 +118,21 @@ export function groupItemsByPublication(items: DeliveryItem[]): PublicationGroup
   const groupsByPublication = new Map<string, DeliveryItem[]>();
 
   for (const item of items) {
-    const current = groupsByPublication.get(item.publicationName) ?? [];
+    const publicationKey = normalizePublicationName(item.publicationName);
+    const current = groupsByPublication.get(publicationKey) ?? [];
     current.push(item);
-    groupsByPublication.set(item.publicationName, current);
+    groupsByPublication.set(publicationKey, current);
   }
 
   return Array.from(groupsByPublication.entries())
-    .map(([publicationName, publicationItems]) => {
+    .map(([publicationKey, publicationItems]) => {
       const sortedItems = [...publicationItems].sort(compareItems);
+      const aliases = getPublicationAliases(sortedItems);
 
       return {
-        id: publicationName,
-        publicationName,
+        id: publicationKey,
+        publicationName: aliases[0] ?? publicationKey,
+        aliases,
         items: sortedItems,
         totalQuantity: sortedItems.reduce((sum, item) => sum + item.quantity, 0),
         dateRange: buildDateRange(sortedItems.map((item) => item.deliveryDate)),
@@ -432,6 +435,31 @@ function normalizeDestinationName(value: unknown, relativePath: string, sheetNam
 
 function normalizeText(value: unknown) {
   return formatCellValue(value).replace(/\s+/g, "");
+}
+
+function normalizePublicationName(publicationName: string) {
+  return publicationName
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/\([^)]*\)\s*$/g, "")
+    .replace(/\s*\(\s*/g, "(")
+    .replace(/\s*\)\s*/g, ")")
+    .replace(/\s+/g, "");
+}
+
+function getPublicationAliases(items: DeliveryItem[]) {
+  const aliases = new Map<string, string>();
+
+  for (const item of items) {
+    const displayName = item.publicationName.normalize("NFC").trim();
+    const key = displayName.toLowerCase();
+
+    if (displayName && !aliases.has(key)) {
+      aliases.set(key, displayName);
+    }
+  }
+
+  return Array.from(aliases.values()).sort((a, b) => a.localeCompare(b, "ko"));
 }
 
 function compareDocuments(a: DeliveryDocument, b: DeliveryDocument) {

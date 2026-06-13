@@ -143,6 +143,12 @@ export function UploadAfter({ groups, onReset }: UploadAfterProps) {
                           {publicationGroup.dateRange || "날짜 없음"} ·{" "}
                           {publicationGroup.items.length}개 항목 · 총 {publicationGroup.totalQuantity}부
                         </span>
+                        {publicationGroup.aliases.length > 1 && (
+                          <div className="publication-aliases">
+                            <span>묶인 간행물명</span>
+                            <p>{publicationGroup.aliases.join(", ")}</p>
+                          </div>
+                        )}
                       </div>
                       <div className="item-actions">
                         <button

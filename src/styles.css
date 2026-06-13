@@ -585,15 +585,46 @@ h1 {
 }
 
 .publication-item strong,
-.publication-item span {
+.publication-item span,
+.publication-item small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.publication-item span {
+.publication-item span,
+.publication-item small {
   color: #667681;
   font-size: 0.9rem;
+}
+
+.publication-item small {
+  color: #53616e;
+}
+
+.publication-aliases {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px solid #d9e1e4;
+  border-radius: 6px;
+  background: #f7fafb;
+}
+
+.publication-aliases span {
+  color: #34424d;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.publication-aliases p {
+  overflow: hidden;
+  margin-bottom: 0;
+  color: #667681;
+  font-size: 0.88rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .item-actions {

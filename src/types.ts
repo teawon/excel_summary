@@ -54,6 +54,7 @@ export type DeliveryGroup = {
 export type PublicationGroup = {
   id: string;
   publicationName: string;
+  aliases: string[];
   items: DeliveryItem[];
   totalQuantity: number;
   dateRange: string;
