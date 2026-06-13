@@ -1,4 +1,8 @@
 import * as XLSX from "xlsx";
+import {
+  publicationAliasGroups,
+  publicationAliasPatterns,
+} from "../constants/publicationAliases";
 import type {
   DeliveryDocument,
   DeliveryGroup,
@@ -38,6 +42,8 @@ type DataTransferItemWithEntry = {
 
 const excelFilePattern = /\.(xlsx|xls|csv)$/i;
 const codeSuffixPattern = /\s+[A-Z]{2}\d{3,}$/;
+const publicationAliasKeyMap = buildPublicationAliasKeyMap();
+const publicationAliasPatternRules = buildPublicationAliasPatternRules();
 
 export async function parseDeliveryDocument({
   file,
@@ -438,6 +444,21 @@ function normalizeText(value: unknown) {
 }
 
 function normalizePublicationName(publicationName: string) {
+  const normalizedName = normalizePublicationNameBase(publicationName);
+  const mappedName = publicationAliasKeyMap.get(normalizedName);
+
+  if (mappedName) {
+    return mappedName;
+  }
+
+  const matchedRule = publicationAliasPatternRules.find((rule) =>
+    rule.patterns.some((pattern) => pattern.test(normalizedName)),
+  );
+
+  return matchedRule?.canonicalKey ?? normalizedName;
+}
+
+function normalizePublicationNameBase(publicationName: string) {
   return publicationName
     .normalize("NFC")
     .toLowerCase()
@@ -445,6 +466,29 @@ function normalizePublicationName(publicationName: string) {
     .replace(/\s*\(\s*/g, "(")
     .replace(/\s*\)\s*/g, ")")
     .replace(/\s+/g, "");
+}
+
+function buildPublicationAliasKeyMap() {
+  const aliasMap = new Map<string, string>();
+
+  for (const group of publicationAliasGroups) {
+    const canonicalKey = normalizePublicationNameBase(group.canonicalName);
+
+    aliasMap.set(canonicalKey, canonicalKey);
+
+    for (const alias of group.aliases) {
+      aliasMap.set(normalizePublicationNameBase(alias), canonicalKey);
+    }
+  }
+
+  return aliasMap;
+}
+
+function buildPublicationAliasPatternRules() {
+  return publicationAliasPatterns.map((group) => ({
+    canonicalKey: normalizePublicationNameBase(group.canonicalName),
+    patterns: group.patterns,
+  }));
 }
 
 function getPublicationAliases(items: DeliveryItem[]) {
