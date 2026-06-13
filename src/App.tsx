@@ -23,7 +23,11 @@ type PendingDuplicateUpload = {
   candidates: DuplicateCandidate[];
 };
 
-const defaultExcludedDestinations = ["국립중앙도서관(신문)", "국립중앙도서관(잡지)"];
+const defaultExcludedDestinations = [
+  "국립중앙도서관(신문)",
+  "국립중앙도서관(잡지)",
+  "해동경제연구원 일본신문 납품서 양식",
+];
 const excludedDestinationsStorageKey = "excel-summary:excluded-destinations";
 
 function App() {
@@ -68,9 +72,19 @@ function App() {
   };
 
   const parseUploadFiles = async (files: UploadFile[]) => {
-    const excelFiles = files.filter(({ file }) => isExcelFile(file));
+    const nextFilteredItems: FilteredItem[] = [];
+    const excelFiles = files
+      .filter(({ file }) => isExcelFile(file))
+      .filter((uploadFile) =>
+        !isExcludedByPath(uploadFile, excludedDestinations, nextFilteredItems),
+      );
 
     if (excelFiles.length === 0) {
+      if (nextFilteredItems.length > 0) {
+        setFilteredItems((current) => [...current, ...nextFilteredItems]);
+        return;
+      }
+
       setErrors((current) => [
         ...current,
         {
@@ -86,7 +100,6 @@ function App() {
     setIsReading(true);
     const parsedDocuments: DeliveryDocument[] = [];
     const parseErrors: ParseError[] = [];
-    const nextFilteredItems: FilteredItem[] = [];
 
     await Promise.all(
       excelFiles.map(async (uploadFile) => {
@@ -284,6 +297,30 @@ function applyFilters(
   };
 }
 
+function isExcludedByPath(
+  uploadFile: UploadFile,
+  excludedDestinations: string[],
+  filteredItems: FilteredItem[],
+) {
+  const normalizedPath = normalizeDestination(uploadFile.relativePath);
+  const matchedDestination = excludedDestinations
+    .map(normalizeDestination)
+    .find((destination) => destination && normalizedPath.includes(destination));
+
+  if (!matchedDestination) {
+    return false;
+  }
+
+  filteredItems.push({
+    id: `${uploadFile.relativePath}-${uploadFile.file.lastModified}-path-filter`,
+    fileName: uploadFile.file.name,
+    relativePath: uploadFile.relativePath,
+    reason: `미포함 파일명/경로: ${matchedDestination}`,
+  });
+
+  return true;
+}
+
 function readExcludedDestinations() {
   if (typeof window === "undefined") {
     return defaultExcludedDestinations;
@@ -294,7 +331,9 @@ function readExcludedDestinations() {
     const parsedValue = storedValue ? JSON.parse(storedValue) : null;
 
     if (Array.isArray(parsedValue)) {
-      return parsedValue.map(String).map(normalizeDestination).filter(Boolean);
+      return mergeWithDefaultExcludedDestinations(
+        parsedValue.map(String).map(normalizeDestination).filter(Boolean),
+      );
     }
   } catch {
     return defaultExcludedDestinations;
@@ -312,6 +351,10 @@ function persistExcludedDestinations(destinations: string[]) {
   );
 
   return normalizedDestinations;
+}
+
+function mergeWithDefaultExcludedDestinations(destinations: string[]) {
+  return [...new Set([...defaultExcludedDestinations.map(normalizeDestination), ...destinations])];
 }
 
 function normalizeDestination(destination: string) {
