@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { IncomingItemGroup, IncomingRecord } from "../types";
+import type { IncomingItemGroup } from "../types";
+import { downloadItemGroup } from "../utils/excel";
 
 type IncomingResultProps = {
   groups: IncomingItemGroup[];
@@ -92,7 +93,7 @@ function ItemGroupCard({
       </summary>
 
       <div className="incoming-card-detail">
-        <RecordTable records={group.records} missingDates={group.missingDates} />
+        <PreviewTable group={group} />
       </div>
     </details>
   );
@@ -132,69 +133,48 @@ function DateCoverage({
   );
 }
 
-function RecordTable({
-  records,
-  missingDates,
-}: {
-  records: IncomingRecord[];
-  missingDates: string[];
-}) {
-  const missingSet = new Set(missingDates);
 
-  const dateGroups = new Map<string, IncomingRecord[]>();
-  for (const record of records) {
-    const current = dateGroups.get(record.date) ?? [];
-    current.push(record);
-    dateGroups.set(record.date, current);
-  }
-
-  const allDatesInTable = [
-    ...[...dateGroups.keys()].sort(),
-    ...missingDates,
-  ].sort();
-
-  const uniqueDates = [...new Set(allDatesInTable)];
-
+function PreviewTable({ group }: { group: IncomingItemGroup }) {
   return (
-    <div className="incoming-table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>날짜</th>
-            <th>ISSUE</th>
-            <th>VOL.NO</th>
-            <th>입고</th>
-            <th>독자부수</th>
-            <th>비고</th>
-          </tr>
-        </thead>
-        <tbody>
-          {uniqueDates.map((date) => {
-            if (missingSet.has(date)) {
-              return (
-                <tr key={date} className="missing-row">
-                  <td>{formatDate(date)}</td>
-                  <td colSpan={5} className="missing-cell">누락</td>
-                </tr>
-              );
-            }
-
-            const dayRecords = dateGroups.get(date) ?? [];
-            return dayRecords.map((record, i) => (
+    <div className="incoming-preview-wrap">
+      <div className="incoming-preview-actions">
+        <span className="incoming-preview-count">{group.records.length}개 행</span>
+        <button
+          className="download-button"
+          type="button"
+          onClick={() => downloadItemGroup(group)}
+        >
+          엑셀 다운로드
+        </button>
+      </div>
+      <div className="incoming-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>날짜</th>
+              <th>품목명</th>
+              <th>ISSUE</th>
+              <th>VOL.NO</th>
+              <th>입고</th>
+              <th>독자부수</th>
+              <th>비고</th>
+            </tr>
+          </thead>
+          <tbody>
+            {group.records.map((record) => (
               <tr key={record.id}>
-                {i === 0 && (
-                  <td rowSpan={dayRecords.length}>{formatDate(date)}</td>
-                )}
+                <td>{formatDate(record.date)}</td>
+                <td>{record.itemName}</td>
                 <td>{record.issue}</td>
                 <td>{record.volNo}</td>
                 <td>{record.quantity}</td>
                 <td>{record.subscriberQty}</td>
                 <td>{record.remark}</td>
               </tr>
-            ));
-          })}
-        </tbody>
-      </table>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

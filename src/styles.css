@@ -590,6 +590,11 @@ h1 {
   border-bottom: 1px solid #e1e7ea;
   cursor: pointer;
   list-style: none;
+  transition: background 0.12s;
+}
+
+.library-card-summary:hover {
+  background: #f7fafb;
 }
 
 .library-card-summary h2 {
@@ -1179,6 +1184,11 @@ tr:hover td {
   border-bottom: 1px solid #e1e7ea;
   cursor: pointer;
   list-style: none;
+  transition: background 0.12s;
+}
+
+.incoming-card-summary:hover {
+  background: #f7fafb;
 }
 
 .incoming-card-summary::-webkit-details-marker {
@@ -1263,6 +1273,24 @@ tr:hover td {
 .incoming-table-wrap {
   overflow-x: auto;
   max-height: 480px;
+}
+
+.incoming-preview-wrap {
+  display: grid;
+}
+
+.incoming-preview-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 22px;
+  border-bottom: 1px solid #e1e7ea;
+}
+
+.incoming-preview-count {
+  color: #667681;
+  font-size: 0.9rem;
 }
 
 .missing-row td {

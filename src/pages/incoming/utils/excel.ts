@@ -1,6 +1,33 @@
 import * as XLSX from "xlsx";
 import type { IncomingFile, IncomingItemGroup, IncomingRecord } from "../types";
 
+export function downloadItemGroup(group: IncomingItemGroup) {
+  const rows = [
+    ["날짜", "품목명", "ISSUE", "VOL.NO", "입고", "독자부수", "비고"],
+    ...group.records.map((r) => [
+      r.date,
+      r.itemName,
+      r.issue,
+      r.volNo,
+      r.quantity,
+      r.subscriberQty,
+      r.remark,
+    ]),
+  ];
+
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+  worksheet["!cols"] = [
+    { wch: 14 }, { wch: 36 }, { wch: 14 }, { wch: 10 },
+    { wch: 8 },  { wch: 10 }, { wch: 16 },
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, group.itemName.slice(0, 31));
+
+  const safeFileName = group.itemName.replace(/[\\/:*?"<>|]/g, "_");
+  XLSX.writeFile(workbook, `입고집계_${safeFileName}.xlsx`);
+}
+
 export function isExcelFile(file: File) {
   return /\.(xlsx|xls)$/i.test(file.name) && !file.name.startsWith("~$");
 }
