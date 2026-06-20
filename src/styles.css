@@ -1142,9 +1142,9 @@ tr:hover td {
 }
 
 .incoming-search {
-  flex: 1;
+  width: 100%;
   min-height: 44px;
-  padding: 0 16px;
+  padding: 0 40px 0 16px;
   border: 1px solid #cfd8dc;
   border-radius: 8px;
   background: #ffffff;
@@ -1163,6 +1163,69 @@ tr:hover td {
   font-size: 0.9rem;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.autocomplete-wrap {
+  position: relative;
+  flex: 1;
+}
+
+.search-clear-button {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: #d9e1e4;
+  color: #34424d;
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.search-clear-button:hover {
+  background: #c0cdd2;
+}
+
+.autocomplete-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 0;
+  padding: 4px 0;
+  border: 1px solid #cfd8dc;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(29, 39, 51, 0.1);
+  list-style: none;
+}
+
+.autocomplete-item {
+  padding: 9px 16px;
+  color: #1d2733;
+  cursor: pointer;
+  font-size: 0.92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.active {
+  background: #f4f7f8;
+}
+
+.autocomplete-highlight {
+  background: none;
+  color: #0f7a66;
+  font-weight: 800;
 }
 
 .incoming-item-list {

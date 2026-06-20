@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { IncomingItemGroup } from "../types";
 import { downloadItemGroup } from "../utils/excel";
 
@@ -9,15 +9,29 @@ type IncomingResultProps = {
 };
 
 export function IncomingResult({ groups, allDates, onReset }: IncomingResultProps) {
+  const [inputValue, setInputValue] = useState("");
   const [search, setSearch] = useState("");
+  const debouncedInput = useDebounce(inputValue, 200);
+
+  useEffect(() => {
+    setSearch(debouncedInput);
+  }, [debouncedInput]);
 
   const filtered = search.trim()
-    ? groups.filter((g) =>
-        g.itemName.toLowerCase().includes(search.trim().toLowerCase()),
-      )
+    ? groups.filter((g) => g.itemName.toLowerCase().includes(search.trim().toLowerCase()))
     : groups;
 
   const totalQuantity = groups.reduce((sum, g) => sum + g.totalQuantity, 0);
+
+  const handleSelect = (name: string) => {
+    setInputValue(name);
+    setSearch(name);
+  };
+
+  const handleClear = () => {
+    setInputValue("");
+    setSearch("");
+  };
 
   return (
     <section className="incoming-result" aria-label="입고 현황">
@@ -37,19 +51,14 @@ export function IncomingResult({ groups, allDates, onReset }: IncomingResultProp
         </div>
       </header>
 
-      <div className="incoming-search-wrap">
-        <input
-          className="incoming-search"
-          type="search"
-          placeholder="품목명으로 검색 (예: 마이니치)"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="품목명 검색"
-        />
-        {search && (
-          <span className="incoming-search-count">{filtered.length}개 품목</span>
-        )}
-      </div>
+      <SearchBar
+        value={inputValue}
+        suggestions={groups.map((g) => g.itemName)}
+        resultCount={search.trim() ? filtered.length : null}
+        onChange={setInputValue}
+        onSelect={handleSelect}
+        onClear={handleClear}
+      />
 
       <div className="incoming-item-list">
         {filtered.length === 0 ? (
@@ -64,6 +73,126 @@ export function IncomingResult({ groups, allDates, onReset }: IncomingResultProp
         )}
       </div>
     </section>
+  );
+}
+
+type SearchBarProps = {
+  value: string;
+  suggestions: string[];
+  resultCount: number | null;
+  onChange: (value: string) => void;
+  onSelect: (value: string) => void;
+  onClear: () => void;
+};
+
+function SearchBar({ value, suggestions, resultCount, onChange, onSelect, onClear }: SearchBarProps) {
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const filtered = value.trim()
+    ? suggestions.filter((s) => s.toLowerCase().includes(value.trim().toLowerCase())).slice(0, 8)
+    : [];
+
+  const isOpen = open && filtered.length > 0;
+
+  useEffect(() => {
+    setActiveIndex(-1);
+  }, [value]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isOpen) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(i + 1, filtered.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, -1));
+    } else if (e.key === "Enter" && activeIndex >= 0) {
+      e.preventDefault();
+      onSelect(filtered[activeIndex]);
+      setOpen(false);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+  };
+
+  return (
+    <div className="incoming-search-wrap" ref={wrapperRef}>
+      <div className="autocomplete-wrap">
+        <input
+          ref={inputRef}
+          className="incoming-search"
+          type="text"
+          placeholder="품목명으로 검색 (예: 마이니치)"
+          value={value}
+          aria-label="품목명 검색"
+          aria-autocomplete="list"
+          aria-expanded={isOpen}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={handleKeyDown}
+        />
+        {value && (
+          <button className="search-clear-button" type="button" onClick={() => { onClear(); inputRef.current?.focus(); }}>
+            ✕
+          </button>
+        )}
+        {isOpen && (
+          <ul className="autocomplete-dropdown" role="listbox">
+            {filtered.map((name, i) => (
+              <li
+                key={name}
+                className={`autocomplete-item ${i === activeIndex ? "active" : ""}`}
+                role="option"
+                aria-selected={i === activeIndex}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onSelect(name);
+                  setOpen(false);
+                }}
+                onMouseEnter={() => setActiveIndex(i)}
+              >
+                <Highlight text={name} query={value.trim()} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {resultCount !== null && (
+        <span className="incoming-search-count">{resultCount}개 품목</span>
+      )}
+    </div>
+  );
+}
+
+function Highlight({ text, query }: { text: string; query: string }) {
+  if (!query) return <>{text}</>;
+
+  const index = text.toLowerCase().indexOf(query.toLowerCase());
+  if (index < 0) return <>{text}</>;
+
+  return (
+    <>
+      {text.slice(0, index)}
+      <mark className="autocomplete-highlight">{text.slice(index, index + query.length)}</mark>
+      {text.slice(index + query.length)}
+    </>
   );
 }
 
@@ -133,7 +262,6 @@ function DateCoverage({
   );
 }
 
-
 function PreviewTable({ group }: { group: IncomingItemGroup }) {
   return (
     <div className="incoming-preview-wrap">
@@ -177,6 +305,15 @@ function PreviewTable({ group }: { group: IncomingItemGroup }) {
       </div>
     </div>
   );
+}
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
 }
 
 function formatDate(date: string) {
