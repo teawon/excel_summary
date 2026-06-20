@@ -21,10 +21,130 @@ button {
   font: inherit;
 }
 
+.gnb {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  padding: 0 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #e1e7ea;
+}
+
+.gnb-home {
+  margin-right: 8px;
+  color: #1d2733;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.gnb-links {
+  display: flex;
+  gap: 4px;
+}
+
+.gnb-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 6px;
+  color: #53616e;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.gnb-link:hover {
+  background: #f4f7f8;
+  color: #1d2733;
+}
+
+.gnb-link.active {
+  background: #eaf6f3;
+  color: #0f604f;
+  font-weight: 800;
+}
+
+.home {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 72px 0 80px;
+}
+
+.home-header {
+  margin-bottom: 48px;
+  text-align: center;
+}
+
+.home-header p {
+  margin-bottom: 0;
+  color: #53616e;
+  font-size: 1.05rem;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.feature-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  padding: 24px;
+  border: 1px solid #d9e1e4;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #1d2733;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.feature-card:hover {
+  border-color: #0f7a66;
+  box-shadow: 0 4px 16px rgba(15, 122, 102, 0.1);
+}
+
+.feature-card-indicator {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: #0f7a66;
+}
+
+.feature-card-body {
+  flex: 1;
+}
+
+.feature-card-body h2 {
+  margin-bottom: 8px;
+  font-size: 1.15rem;
+}
+
+.feature-card-body p {
+  margin-bottom: 0;
+  color: #53616e;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.feature-card-action {
+  color: #0f7a66;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
 .app-shell {
   position: relative;
   width: min(1180px, calc(100% - 32px));
-  min-height: 100vh;
+  min-height: calc(100vh - 52px);
   margin: 0 auto;
   padding: 40px 0;
 }
@@ -45,7 +165,7 @@ button {
 .drop-panel {
   display: grid;
   place-items: center;
-  min-height: calc(100vh - 80px);
+  min-height: calc(100vh - 80px - 52px);
   padding: 40px;
   border: 2px dashed #b8c8cf;
   border-radius: 8px;
